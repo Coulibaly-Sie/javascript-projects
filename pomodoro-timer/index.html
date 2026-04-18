@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pomodoro Timer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+    }
+    h1 { font-size: 1.8rem; letter-spacing: 2px; color: #e94560; }
+    .mode-btns { display: flex; gap: 10px; }
+    .mode-btns button {
+      padding: 6px 16px;
+      border: 2px solid #e94560;
+      background: transparent;
+      color: #eee;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: background 0.2s;
+    }
+    .mode-btns button.active, .mode-btns button:hover { background: #e94560; }
+    .timer-container {
+      position: relative;
+      width: 220px;
+      height: 220px;
+    }
+    svg { transform: rotate(-90deg); }
+    #bg-circle { fill: none; stroke: #16213e; stroke-width: 12; }
+    #progress-circle {
+      fill: none;
+      stroke: #e94560;
+      stroke-width: 12;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 1s linear;
+    }
+    .timer-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 3rem;
+      font-weight: bold;
+      letter-spacing: 2px;
+    }
+    .controls { display: flex; gap: 15px; }
+    .controls button {
+      padding: 12px 28px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: bold;
+      transition: transform 0.1s, opacity 0.2s;
+    }
+    .controls button:hover { transform: scale(1.05); }
+    #btn-start { background: #e94560; color: white; }
+    #btn-reset { background: #16213e; color: #eee; border: 1px solid #444; }
+    .sessions {
+      font-size: 0.9rem;
+      color: #aaa;
+      text-align: center;
+    }
+    .sessions span { color: #e94560; font-weight: bold; font-size: 1.1rem; }
+    .status-label {
+      font-size: 0.95rem;
+      color: #aaa;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+  <h1>Pomodoro</h1>
+  <div class="mode-btns">
+    <button class="active" onclick="setMode('work')">Travail</button>
+    <button onclick="setMode('short')">Pause courte</button>
+    <button onclick="setMode('long')">Pause longue</button>
+  </div>
+  <div class="timer-container">
+    <svg width="220" height="220" viewBox="0 0 220 220">
+      <circle id="bg-circle" cx="110" cy="110" r="95"/>
+      <circle id="progress-circle" cx="110" cy="110" r="95"/>
+    </svg>
+    <div class="timer-text" id="display">25:00</div>
+  </div>
+  <p class="status-label" id="status-label">Prêt</p>
+  <div class="controls">
+    <button id="btn-start" onclick="toggleTimer()">Démarrer</button>
+    <button id="btn-reset" onclick="resetTimer()">Reset</button>
+  </div>
+  <div class="sessions">
+    Sessions complétées : <span id="session-count">0</span>
+  </div>
+
+  <script>
+    const MODES = { work: 25 * 60, short: 5 * 60, long: 15 * 60 };
+    const CIRCUMFERENCE = 2 * Math.PI * 95;
+    let currentMode = 'work';
+    let totalTime = MODES.work;
+    let remaining = totalTime;
+    let running = false;
+    let intervalId = null;
+    let sessions = parseInt(localStorage.getItem('pomodoro-sessions') || '0');
+
+    const display = document.getElementById('display');
+    const circle = document.getElementById('progress-circle');
+    const startBtn = document.getElementById('btn-start');
+    const statusLabel = document.getElementById('status-label');
+    const sessionCountEl = document.getElementById('session-count');
+
+    circle.style.strokeDasharray = CIRCUMFERENCE;
+    sessionCountEl.textContent = sessions;
+    updateCircle();
+
+    function setMode(mode) {
+      clearInterval(intervalId);
+      running = false;
+      currentMode = mode;
+      totalTime = MODES[mode];
+      remaining = totalTime;
+      startBtn.textContent = 'Démarrer';
+      statusLabel.textContent = 'Prêt';
+      document.querySelectorAll('.mode-btns button').forEach((b, i) => {
+        b.classList.toggle('active', ['work', 'short', 'long'][i] === mode);
+      });
+      updateDisplay();
+      updateCircle();
+    }
+
+    function toggleTimer() {
+      if (running) {
+        clearInterval(intervalId);
+        running = false;
+        startBtn.textContent = 'Reprendre';
+        statusLabel.textContent = 'En pause';
+      } else {
+        running = true;
+        startBtn.textContent = 'Pause';
+        statusLabel.textContent = currentMode === 'work' ? 'Au travail !' : 'Pause...';
+        intervalId = setInterval(tick, 1000);
+      }
+    }
+
+    function resetTimer() {
+      clearInterval(intervalId);
+      running = false;
+      remaining = totalTime;
+      startBtn.textContent = 'Démarrer';
+      statusLabel.textContent = 'Prêt';
+      updateDisplay();
+      updateCircle();
+    }
+
+    function tick() {
+      remaining--;
+      updateDisplay();
+      updateCircle();
+      if (remaining <= 0) {
+        clearInterval(intervalId);
+        running = false;
+        playBeep();
+        if (currentMode === 'work') {
+          sessions++;
+          localStorage.setItem('pomodoro-sessions', sessions);
+          sessionCountEl.textContent = sessions;
+          statusLabel.textContent = 'Session terminée !';
+        } else {
+          statusLabel.textContent = 'Pause terminée !';
+        }
+        startBtn.textContent = 'Démarrer';
+      }
+    }
+
+    function updateDisplay() {
+      const m = String(Math.floor(remaining / 60)).padStart(2, '0');
+      const s = String(remaining % 60).padStart(2, '0');
+      display.textContent = `${m}:${s}`;
+    }
+
+    function updateCircle() {
+      const offset = CIRCUMFERENCE * (1 - remaining / totalTime);
+      circle.style.strokeDashoffset = CIRCUMFERENCE - offset;
+    }
+
+    function playBeep() {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      [0, 0.3, 0.6].forEach(delay => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = 880;
+        osc.type = 'sine';
+        gain.gain.setValueAtTime(0.4, ctx.currentTime + delay);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.4);
+        osc.start(ctx.currentTime + delay);
+        osc.stop(ctx.currentTime + delay + 0.4);
+      });
+    }
+
+    updateDisplay();
+  </script>
+</body>
+</html>
